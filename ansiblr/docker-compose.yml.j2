@@ -1,0 +1,99 @@
+# This docker-compose.yml file  is fully functional to evaluate DefectDojo
+# in your local environment.
+#
+# Although Docker Compose is one of the supported installation methods to
+# deploy a containerized DefectDojo in a production environment, the
+# docker-compose.yml file is not intended for production use without first
+# customizing it to your particular situation.
+---
+version: '3.8'
+services:
+  nginx:
+    image: "-nginx:{{ NGINX_VERSION }}"
+    container_name: "nginx"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nginx.rule=Host(`defectdojo.litota.tech`)
+      - traefik.http.services.nginx.loadbalancer.server.port=8080
+      - traefik.http.routers.nginx.tls=true
+      - traefik.http.routers.nginx.tls.certresolver=le
+    environment:
+      NGINX_METRICS_ENABLED: "{{ NGINX_METRICS_ENABLED }}"
+    depends_on:
+      uwsgi:
+        condition: service_started
+    restart: unless-stopped
+
+  traefik:
+    image: "traefik:v2.2"
+    container_name: "traefik"
+    depends_on:
+      nginx:
+        condition: service_started
+    userns_mode: "host"
+    network_mode: "host"
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entryPoints.http.address=:80
+      - --entryPoints.https.address=:443
+      - --certificatesResolvers.le.acme.email=chumakov.alexandr@litota.ru
+      - --certificatesResolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=digitalocean
+      - --entrypoints.http.http.redirections.entrypoint.to=https
+      - --entrypoints.http.http.redirections.entrypoint.scheme=https
+      - --providers.file.filename=/configs/traefik_tls.yml
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik_tls.yml:/configs/traefik_tls.yml"
+      - "./letsencrypt:/letsencrypt"
+    restart: always
+
+  uwsgi:
+    image: "-django:{{ DJANGO_VERSION }}"
+    container_name: "uwsgi"
+    depends_on:
+      initializer:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    entrypoint: ['/wait-for-it.sh', '{{ DD_DATABASE_HOST }}:{{ DD_DATABASE_PORT }}', '-t', '30', '--', '/entrypoint-uwsgi.sh']
+    restart: always
+
+ 
+
+  postgres:
+    image: postgres:14.5-alpine
+    container_name: "postgres"
+    environment:
+      POSTGRES_DB: {{ DATABASE_NAME }}
+      POSTGRES_USER: {{ DATABASE_USER }}
+      POSTGRES_PASSWORD: {{ DATABASE_PASSWORD }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3.11.0-alpine
+    container_name: "rabbitmq"
+    volumes:
+       - ./rabbitmq:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "{{ RABBITMQ_DEFAULT_USER }}"
+      RABBITMQ_DEFAULT_PASS: "{{ RABBITMQ_DEFAULT_PASS }}"
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: always

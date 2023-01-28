@@ -1,0 +1,69 @@
+- hosts: defect-dojo
+  gather_facts: no
+  tasks:
+  - wait_for_connection:
+      timeout: 600
+
+# Install
+
+- hosts: defect-dojo
+  become: yes
+  become_user: root
+  vars:
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_python_interpreter: /usr/bin/python3
+    timezone: Europe/Moscow
+
+    NGINX_VERSION: "2.15.1"
+
+
+    DATABASE_HOST: "postgres"
+    DATABASE_PORT: "5432"
+
+
+  tasks:
+
+  - name: Set timezone
+    timezone:
+      name: "{{ timezone }}"
+    become: true
+
+  - name: Install pip
+    apt:
+      name:
+      - python3-pip
+
+  - name: Install dependencies for docker-compose module
+    pip:
+      executable: pip3
+      name:
+      - docker-compose
+  
+  - name: Prepare service directory
+    file:
+      path: /opt/pritunl-server
+      state: directory
+
+  - name: Copy files
+    template:
+      src: traefik_tls.yml
+      dest: /opt/pritunl-server/traefik_tls.yml
+    notify: Compose restart 
+    
+  - name: Compose templating
+    template:
+      src: docker-compose.yml.j2
+      dest: /opt/pritunl-server/docker-compose.yml
+
+  - name: Compose up
+    docker_compose:
+      project_src: /opt/pritunl-server/
+      state: present
+      remove_orphans: yes
+
+  handlers:
+
+  - name: Compose restart
+    docker_compose:
+      project_src: /opt/pritunl-server/
+      restarted: yes
