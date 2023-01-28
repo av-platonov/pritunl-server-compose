@@ -1,4 +1,4 @@
-- hosts: defect-dojo
+- hosts: vds
   gather_facts: no
   tasks:
   - wait_for_connection:
@@ -6,7 +6,7 @@
 
 # Install
 
-- hosts: defect-dojo
+- hosts: vds
   become: yes
   become_user: root
   vars:
@@ -14,6 +14,8 @@
     ansible_python_interpreter: /usr/bin/python3
     timezone: Europe/Moscow
 
+    DOMAIN_NAME: "your.domain.name"
+    PRITUNL_VERSION: "1.30.3414.5"
     NGINX_VERSION: "2.15.1"
 
 
