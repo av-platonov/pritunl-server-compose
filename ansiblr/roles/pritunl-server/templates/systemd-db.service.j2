@@ -1,0 +1,28 @@
+[Unit]
+Description={{ SERVICE_NAME }} service with docker-compose
+Requires=docker.service
+After=docker.service
+
+[Service]
+User={{ USER_NAME }}
+Group={{ GROUP_NAME }}
+Restart=always
+
+WorkingDirectory={{ WORK_DIR }}/{{ SERVICE_NAME }}
+
+## Remove old containers, network and volumes
+ExecStartPre=/usr/local/bin/docker-compose -f docker-compose-{{ SERVICE_NAME }}.yaml down -v
+# ExecStartPre=-/bin/bash -c 'docker network rm docker_{{ SERVICE_NAME }}_net'
+# ExecStartPre=-/bin/bash -c 'docker ps -aqf "name=docker_{{ SERVICE_NAME }}_vol" | xargs docker rm'
+
+## Compose up
+ExecStart=/usr/local/bin/docker-compose -f docker-compose-{{ SERVICE_NAME }}.yaml up
+
+## Compose down, remove containers
+ExecStop=/usr/local/bin/docker-compose -f docker-compose-{{ SERVICE_NAME }}.yaml down
+
+# ## Compose rebuid containers
+# ExecReload=/usr/local/bin/docker-compose -f docker-compose-{{ SERVICE_NAME }}.yaml up --build
+
+[Install]
+WantedBy=multi-user.target

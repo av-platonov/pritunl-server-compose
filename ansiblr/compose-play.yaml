@@ -1,4 +1,4 @@
-- hosts: defect-dojo
+- hosts: pritunl
   gather_facts: no
   tasks:
   - wait_for_connection:
@@ -6,7 +6,7 @@
 
 # Install
 
-- hosts: defect-dojo
+- hosts: pritunl
   become: yes
   become_user: root
   vars:

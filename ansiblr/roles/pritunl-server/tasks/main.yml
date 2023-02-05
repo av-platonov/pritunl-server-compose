@@ -1,0 +1,67 @@
+---
+- block:
+  - name: create {{ USER_NAME }} user
+    user:
+      name: "{{ USER_NAME }}"
+      groups: "{{ GROUP_NAME }}"
+      shell: /sbin/nologin
+      append: yes
+      state: present
+      create_home: no
+
+  - name: Create project directory
+    file:
+      path: "{{ WORK_DIR }}/{{ SERVICE_NAME }}"
+      owner: "{{ USER_NAME }}"
+      group: "{{ GROUP_NAME }}"
+      state: directory
+
+  - name: Copy config docker-compose-{{ SERVICE_NAME }}.yaml
+    template: src=templates/{{ item.src }} dest={{ WORK_DIR }}/{{ SERVICE_NAME }}/{{ item.dest }} owner={{ USER_NAME }} group={{ GROUP_NAME }}
+    with_items:
+      - { src: "docker-compose-{{ SERVICE_NAME }}.yaml.j2", dest: "docker-compose-{{ SERVICE_NAME }}.yaml" }
+    register: compose_files
+
+  - name: Copy systed systemd-{{ SERVICE_NAME }}.service
+    # template: src=templates/{{ item.src }} dest=/usr/lib/systemd/system/{{ item.dest }}
+    template: src=templates/{{ item.src }} dest=/etc/systemd/system/{{ item.dest }} mode=644 owner={{ USER_NAME }} group={{ GROUP_NAME }}
+    with_items:
+      - { src: "systemd-{{ SERVICE_NAME }}.service.j2", dest: "systemd-{{ SERVICE_NAME }}.service" }
+    register: systemd_files
+
+  - name: Started systemd {{ SERVICE_NAME }}
+    ansible.builtin.systemd:
+      name: systemd-{{ SERVICE_NAME }}
+      daemon_reload: yes
+      enabled: yes
+      state: started
+
+  # - name: Restart systemd {{ SERVICE_NAME }}
+  #   ansible.builtin.systemd:
+  #     name: systemd-{{ SERVICE_NAME }}
+  #     state: restarted
+
+  # - name: compose {{ SERVICE_NAME }}
+  #   docker_compose:
+  #     project_src: "{{ WORK_DIR }}/{{ SERVICE_NAME }}"
+
+  - name: Compose change stop systemd {{ SERVICE_NAME }} for rebuild
+    ansible.builtin.systemd:
+      name: systemd-{{ SERVICE_NAME }}
+      state: stopped
+    when: compose_files.changed
+  # - name: "{{ SERVICE_NAME }} compose change rebuild"
+  #   docker_compose:
+  #     project_src: "{{ WORK_DIR }}/{{ SERVICE_NAME }}"
+  #     files:
+  #       - docker-compose-{{ SERVICE_NAME }}.yaml
+  #     recreate: always
+  #     build: yes
+  #     nocache: yes
+  #     stopped: yes
+  #   when: compose_files.changed
+  - name: Start systemd {{ SERVICE_NAME }} after rebuild
+    ansible.builtin.systemd:
+      name: systemd-{{ SERVICE_NAME }}
+      state: started
+    when: compose_files.changed

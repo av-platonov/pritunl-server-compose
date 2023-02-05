@@ -1,0 +1,25 @@
+version: '3.7'
+
+services:
+
+  clickhouse:
+    restart: unless-stopped
+    image: {{ CLICKHOUSE_IMAGE }}
+    environment:
+      CLICKHOUSE_USER: {{ CLICKHOUSE_USER }}
+      CLICKHOUSE_PASSWORD: {{ CLICKHOUSE_KEY }}
+    healthcheck:
+      test: wget --spider -q localhost:8123/ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - /var/lib/clickhouse:/var/lib/clickhouse
+{% if NETWORK_MODE  is sameas true %}
+    network_mode: "host"
+{% else %}
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+      - "9009:9009"
+{% endif %}
